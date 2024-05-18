@@ -72,13 +72,12 @@ public class CommandReward implements Reward {
 		}
 
 		var server = Objects.requireNonNull(player.getServer());
-		String playerCommand = command.replace("{player_id}", player.getUuid().toString());
 
 		server.getCommandManager().executeWithPrefix(
 				player.getCommandSource()
 						.withSilent()
-						.withLevel(4),  // 使用最高权限等级
-				playerCommand
+						.withLevel(server.getFunctionPermissionLevel()),
+				command
 		);
 	}
 
