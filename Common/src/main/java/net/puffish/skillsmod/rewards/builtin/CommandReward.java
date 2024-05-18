@@ -1,17 +1,17 @@
-package net.puffish.skillsmod.rewards.builtin;
+package net.puffish.skillsmod.reward.builtin;
 
-import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.util.Identifier;
-import net.puffish.skillsmod.api.SkillsAPI;
 import net.puffish.skillsmod.SkillsMod;
-import net.puffish.skillsmod.api.config.ConfigContext;
-import net.puffish.skillsmod.api.json.JsonElementWrapper;
-import net.puffish.skillsmod.api.json.JsonObjectWrapper;
-import net.puffish.skillsmod.api.rewards.Reward;
-import net.puffish.skillsmod.api.rewards.RewardContext;
-import net.puffish.skillsmod.api.utils.Result;
-import net.puffish.skillsmod.api.utils.Failure;
+import net.puffish.skillsmod.api.SkillsAPI;
+import net.puffish.skillsmod.api.json.JsonElement;
+import net.puffish.skillsmod.api.json.JsonObject;
+import net.puffish.skillsmod.api.reward.Reward;
+import net.puffish.skillsmod.api.reward.RewardConfigContext;
+import net.puffish.skillsmod.api.reward.RewardDisposeContext;
+import net.puffish.skillsmod.api.reward.RewardUpdateContext;
+import net.puffish.skillsmod.api.util.Problem;
+import net.puffish.skillsmod.api.util.Result;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -34,17 +34,19 @@ public class CommandReward implements Reward {
 	}
 
 	public static void register() {
-		SkillsAPI.registerRewardWithData(
+		SkillsAPI.registerReward(
 				ID,
-				CommandReward::create
+				CommandReward::parse
 		);
 	}
 
-	private static Result<CommandReward, Failure> create(JsonElementWrapper rootElement, ConfigContext context) {
-		return rootElement.getAsObject().andThen(CommandReward::create);
+	private static Result<CommandReward, Problem> parse(RewardConfigContext context) {
+		return context.getData()
+				.andThen(JsonElement::getAsObject)
+				.andThen(CommandReward::parse);
 	}
 
-	private static Result<CommandReward, Failure> create(JsonObjectWrapper rootObject) {
+	private static Result<CommandReward, Problem> parse(JsonObject rootObject) {
 		var command = rootObject.getString("command")
 				.getSuccess()
 				.orElse("");
@@ -70,18 +72,21 @@ public class CommandReward implements Reward {
 		}
 
 		var server = Objects.requireNonNull(player.getServer());
+		String playerCommand = command.replace("{player_id}", player.getUuid().toString());
 
 		server.getCommandManager().executeWithPrefix(
 				player.getCommandSource()
 						.withSilent()
-						.withLevel(server.getFunctionPermissionLevel()),
-				command
+						.withLevel(4),  // 使用最高权限等级
+				playerCommand
 		);
 	}
 
 	@Override
-	public void update(ServerPlayerEntity player, RewardContext context) {
-		if (context.isRecent()) {
+	public void update(RewardUpdateContext context) {
+		var player = context.getPlayer();
+
+		if (context.isAction()) {
 			executeCommand(player, command);
 		}
 
@@ -104,9 +109,9 @@ public class CommandReward implements Reward {
 	}
 
 	@Override
-	public void dispose(MinecraftServer server) {
+	public void dispose(RewardDisposeContext context) {
 		for (var entry : counts.entrySet()) {
-			var player = server.getPlayerManager().getPlayer(entry.getKey());
+			var player = context.getServer().getPlayerManager().getPlayer(entry.getKey());
 			if (player == null) {
 				continue;
 			}
